@@ -24,6 +24,11 @@ This document outlines the planned features and milestones for `gh-as-db`.
 ## Phase 4: Production Readiness
 - [x] **Transaction Support**: Optimistic concurrency control using Git SHAs.
 - [x] **Middleware Support**: Hooks for data validation or transformation.
+- [ ] **Improve Tests**: Add more tests and improve test coverage.
+- [ ] **Improve Performance**: Optimize performance and reduce memory usage.
+- [ ] **Improve Error Handling**: Add more error handling and improve error messages.
+- [ ] **Improve Logging**: Add more logging and improve logging messages.
+- [ ] **Improve Documentation**: Add more documentation and improve documentation.
 - [ ] **Comprehensive Documentation**: Detailed API reference and tutorials.
 
 ---
