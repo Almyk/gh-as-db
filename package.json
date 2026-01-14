@@ -5,6 +5,9 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "gh-as-db": "./dist/ui/cli/index.js"
+  },
   "scripts": {
     "test": "vitest",
     "test:run": "vitest run",
@@ -19,6 +22,10 @@
     "vitest": "^4.0.17"
   },
   "dependencies": {
-    "@octokit/rest": "^22.0.1"
+    "@octokit/rest": "^22.0.1",
+    "boxen": "^8.0.1",
+    "chalk": "^5.4.1",
+    "commander": "^13.1.0",
+    "enquirer": "^2.4.1"
   }
 }
