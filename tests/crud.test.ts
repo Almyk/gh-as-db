@@ -108,4 +108,34 @@ describe("CRUD Operations", () => {
       "test-sha"
     );
   });
+
+  describe("Edge Cases", () => {
+    it("should return empty array if collection file does not exist", async () => {
+      vi.spyOn(db.storage, "exists").mockResolvedValue(false);
+      const result = await users.find();
+      expect(result).toEqual([]);
+    });
+
+    it("should throw error if update item not found", async () => {
+      vi.spyOn(db.storage, "exists").mockResolvedValue(true);
+      vi.spyOn(db.storage, "readJson").mockResolvedValue({
+        data: [],
+        sha: "test-sha",
+      });
+      await expect(
+        users.update("non-existent", { name: "New" })
+      ).rejects.toThrow("not found");
+    });
+
+    it("should not call writeJson if delete item not found", async () => {
+      vi.spyOn(db.storage, "exists").mockResolvedValue(true);
+      vi.spyOn(db.storage, "readJson").mockResolvedValue({
+        data: [],
+        sha: "test-sha",
+      });
+      const writeSpy = vi.spyOn(db.storage, "writeJson");
+      await users.delete("non-existent");
+      expect(writeSpy).not.toHaveBeenCalled();
+    });
+  });
 });

@@ -93,4 +93,28 @@ describe("Middleware Support", () => {
 
     expect(logs).toEqual(["mw1", "mw2"]);
   });
+
+  it("should execute middleware during update", async () => {
+    const uppercaseMiddleware: Middleware<{ id: string; name: string }> = {
+      beforeSave: (item) => {
+        return { ...item, name: item.name.toUpperCase() };
+      },
+    };
+
+    mockStorage.readJson = vi.fn().mockResolvedValue({
+      data: [{ id: "1", name: "alice" }],
+      sha: "test-sha",
+    });
+
+    const users = new Collection("users", mockStorage, [uppercaseMiddleware]);
+    const result = await users.update("1", { name: "bob" });
+
+    expect(result.name).toBe("BOB");
+    expect(mockStorage.writeJson).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.arrayContaining([expect.objectContaining({ name: "BOB" })]),
+      expect.any(String),
+      expect.any(String)
+    );
+  });
 });

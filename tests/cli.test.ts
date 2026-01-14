@@ -169,5 +169,72 @@ describe("CLI Commands", () => {
         expect.stringContaining('Collection "missing" does not exist')
       );
     });
+
+    it("should fail if environment variables are missing", async () => {
+      delete process.env.GH_DB_OWNER;
+      await inspectCollectionCommand("users");
+      expect(console.log).toHaveBeenCalledWith(
+        expect.stringContaining("Error: Environment variables")
+      );
+    });
+
+    it("should report error when inspection fails", async () => {
+      process.env.GH_DB_OWNER = "test-owner";
+      process.env.GH_DB_REPO = "test-repo";
+      process.env.GH_DB_TOKEN = "test-token";
+
+      const mockExists = vi.fn().mockResolvedValue(true);
+      const mockReadJson = vi.fn().mockRejectedValue(new Error("Read failed"));
+      vi.mocked(GitHubStorageProvider).mockImplementation(function (this: any) {
+        this.exists = mockExists;
+        this.readJson = mockReadJson;
+      } as any);
+
+      await inspectCollectionCommand("users");
+      expect(console.error).toHaveBeenCalledWith(
+        expect.stringContaining("Error inspecting collection: Read failed")
+      );
+    });
+  });
+
+  describe("Command Failures", () => {
+    it("should report error when init is cancelled or fails", async () => {
+      vi.mocked(enquirer.prompt).mockRejectedValue(new Error("User cancelled"));
+      await initCommand();
+      expect(console.error).toHaveBeenCalledWith(
+        expect.stringContaining("Initialization cancelled or failed.")
+      );
+    });
+
+    it("should report error when list fetch fails", async () => {
+      process.env.GH_DB_OWNER = "test-owner";
+      process.env.GH_DB_REPO = "test-repo";
+      process.env.GH_DB_TOKEN = "test-token";
+
+      const mockGetContent = vi.fn().mockRejectedValue(new Error("API Error"));
+      vi.mocked(Octokit).mockImplementation(function (this: any) {
+        this.repos = { getContent: mockGetContent };
+      } as any);
+
+      await listCollectionsCommand();
+      expect(console.error).toHaveBeenCalledWith(
+        expect.stringContaining("Error fetching collections: API Error")
+      );
+    });
+
+    it("should report when no collections are found", async () => {
+      process.env.GH_DB_OWNER = "test-owner";
+      process.env.GH_DB_REPO = "test-repo";
+      process.env.GH_DB_TOKEN = "test-token";
+
+      vi.mocked(Octokit).mockImplementation(function (this: any) {
+        this.repos = { getContent: vi.fn().mockResolvedValue({ data: [] }) };
+      } as any);
+
+      await listCollectionsCommand();
+      expect(console.log).toHaveBeenCalledWith(
+        expect.stringContaining("No collections found")
+      );
+    });
   });
 });

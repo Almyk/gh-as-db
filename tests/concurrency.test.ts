@@ -103,4 +103,24 @@ describe("Optimistic Concurrency Control", () => {
       })
     );
   });
+
+  it("should handle concurrency conflict during delete", async () => {
+    const initialData = [{ id: "1", name: "Alice" }];
+    const initialSha = "sha-1";
+
+    vi.spyOn(storage, "exists").mockResolvedValue(true);
+    vi.spyOn(storage, "readJson").mockResolvedValue({
+      data: initialData,
+      sha: initialSha,
+    });
+
+    await collection.find();
+
+    const writeSpy = vi
+      .spyOn((storage as any).octokit.repos, "createOrUpdateFileContents")
+      .mockRejectedValue({ status: 409 });
+
+    await expect(collection.delete("1")).rejects.toThrow(ConcurrencyError);
+    expect(writeSpy).toHaveBeenCalled();
+  });
 });
