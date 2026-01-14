@@ -28,8 +28,8 @@ This document outlines the planned features and milestones for `gh-as-db`.
 - [ ] **Improve Performance**: Optimize performance and reduce memory usage.
 - [ ] **Improve Error Handling**: Add more error handling and improve error messages.
 - [ ] **Improve Logging**: Add more logging and improve logging messages.
-- [ ] **Improve Documentation**: Add more documentation and improve documentation.
-- [ ] **Comprehensive Documentation**: Detailed API reference and tutorials.
+- [x] **Improve Documentation**: Add more documentation and improve documentation.
+- [x] **Comprehensive Documentation**: Detailed API reference and tutorials.
 
 ---
 
