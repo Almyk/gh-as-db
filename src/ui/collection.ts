@@ -1,4 +1,4 @@
-import { IStorageProvider, Schema } from "../core/types.js";
+import { IStorageProvider, QueryOptions, Schema } from "../core/types.js";
 
 export class Collection<T extends Schema> {
   constructor(
@@ -25,12 +25,79 @@ export class Collection<T extends Schema> {
     return item;
   }
 
-  async find(predicate?: (item: T) => boolean): Promise<T[]> {
+  async find(
+    queryOrPredicate?: ((item: T) => boolean) | QueryOptions<T>
+  ): Promise<T[]> {
     if (!(await this.storage.exists(this.path))) {
       return [];
     }
-    const items = await this.storage.readJson<T[]>(this.path);
-    return predicate ? items.filter(predicate) : items;
+    let items = await this.storage.readJson<T[]>(this.path);
+
+    if (typeof queryOrPredicate === "function") {
+      return items.filter(queryOrPredicate);
+    }
+
+    if (queryOrPredicate) {
+      return this.applyQueryOptions(items, queryOrPredicate);
+    }
+
+    return items;
+  }
+
+  private applyQueryOptions(items: T[], options: QueryOptions<T>): T[] {
+    let result = [...items];
+
+    // Apply filters
+    if (options.filters) {
+      for (const filter of options.filters) {
+        result = result.filter((item) => {
+          const val = item[filter.field];
+          switch (filter.operator) {
+            case "eq":
+              return val === filter.value;
+            case "neq":
+              return val !== filter.value;
+            case "gt":
+              return val > filter.value;
+            case "gte":
+              return val >= filter.value;
+            case "lt":
+              return val < filter.value;
+            case "lte":
+              return val <= filter.value;
+            case "contains":
+              return (
+                typeof val === "string" && val.includes(filter.value as string)
+              );
+            case "in":
+              return Array.isArray(filter.value) && filter.value.includes(val);
+            default:
+              return true;
+          }
+        });
+      }
+    }
+
+    // Apply sorting
+    if (options.sort) {
+      for (const sort of options.sort) {
+        result.sort((a, b) => {
+          const aVal = a[sort.field];
+          const bVal = b[sort.field];
+          if (aVal < bVal) return sort.order === "asc" ? -1 : 1;
+          if (aVal > bVal) return sort.order === "asc" ? 1 : -1;
+          return 0;
+        });
+      }
+    }
+
+    // Apply pagination
+    if (options.pagination) {
+      const { limit, offset = 0 } = options.pagination;
+      result = result.slice(offset, limit ? offset + limit : undefined);
+    }
+
+    return result;
   }
 
   async findById(id: string): Promise<T | null> {

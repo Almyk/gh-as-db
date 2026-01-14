@@ -12,9 +12,9 @@ This document outlines the planned features and milestones for `gh-as-db`.
     - [x] `delete`: Remove records from a collection.
 
 ## Phase 2: Advanced Querying
-- [ ] **Filtering**: Support for basic predicates (equality, comparison).
-- [ ] **Sorting**: Sort results by one or more fields.
-- [ ] **Pagination**: Efficiently handle large collections using GitHub API's features.
+- [x] **Filtering**: Support for basic predicates (equality, comparison).
+- [x] **Sorting**: Sort results by one or more fields.
+- [x] **Pagination**: Efficiently handle large collections.
 
 ## Phase 3: Developer Experience & Performance
 - [ ] **Caching Layer**: In-memory or local storage caching to reduce GitHub API calls.
