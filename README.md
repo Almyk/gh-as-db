@@ -33,6 +33,10 @@ const db = new GitHubDB({
 
 For small projects, serverless functions, or simple data storage needs, setting up a full database can be overkill. `gh-as-db` provides a familiar database-like interface while keeping your data in a repository you already control.
 
+## Roadmap
+
+See our [ROADMAP.md](./ROADMAP.md) for planned features and project milestones.
+
 ## License
 
 MIT
