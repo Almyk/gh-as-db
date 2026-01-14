@@ -24,6 +24,6 @@ export class GitHubDB {
   }
 
   collection<T extends Schema>(name: string): Collection<T> {
-    return new Collection<T>(name);
+    return new Collection<T>(name, this.storage);
   }
 }

@@ -5,11 +5,11 @@ This document outlines the planned features and milestones for `gh-as-db`.
 ## Phase 1: Core Functionality (Current Focus)
 - [x] **Connection Management**: Robust connection to GitHub repositories via Personal Access Tokens.
 - [x] **Schema Definition**: Basic TypeScript-based schema definitions for "tables" (JSON files).
-- [ ] **CRUD Operations**:
-    - [ ] `create`: Insert new records into a JSON collection.
-    - [ ] `read`: Fetch records by ID or list all.
-    - [ ] `update`: Modify existing records.
-    - [ ] `delete`: Remove records from a collection.
+- [x] **CRUD Operations**:
+    - [x] `create`: Insert new records into a JSON collection.
+    - [x] `read`: Fetch records by ID or list all.
+    - [x] `update`: Modify existing records.
+    - [x] `delete`: Remove records from a collection.
 
 ## Phase 2: Advanced Querying
 - [ ] **Filtering**: Support for basic predicates (equality, comparison).
