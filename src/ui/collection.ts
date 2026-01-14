@@ -18,7 +18,7 @@ export class Collection<T extends Schema> {
     public readonly name: string,
     private readonly storage: IStorageProvider,
     private readonly middleware: Middleware<T>[] = []
-  ) {}
+  ) { }
 
   private get path(): string {
     return `${this.name}.json`;
@@ -175,6 +175,9 @@ export class Collection<T extends Schema> {
             case "lte":
               return val <= filter.value;
             case "contains":
+              if (Array.isArray(val)) {
+                return val.includes(filter.value);
+              }
               return (
                 typeof val === "string" && val.includes(filter.value as string)
               );
