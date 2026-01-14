@@ -1,13 +1,16 @@
 import { Octokit } from "@octokit/rest";
 import { GitHubDBConfig, IStorageProvider } from "../core/types.js";
+import { ICacheProvider, MemoryCacheProvider } from "./cache-provider.js";
 
 export class GitHubStorageProvider implements IStorageProvider {
   private octokit: Octokit;
+  private cache: ICacheProvider;
 
-  constructor(private config: GitHubDBConfig) {
+  constructor(private config: GitHubDBConfig, cache?: ICacheProvider) {
     this.octokit = new Octokit({
       auth: config.accessToken,
     });
+    this.cache = cache || new MemoryCacheProvider();
   }
 
   async testConnection(): Promise<boolean> {
@@ -39,6 +42,11 @@ export class GitHubStorageProvider implements IStorageProvider {
   }
 
   async readJson<T>(path: string): Promise<T> {
+    const cached = this.cache.get<T>(path);
+    if (cached) {
+      return cached;
+    }
+
     const response = await this.octokit.repos.getContent({
       owner: this.config.owner,
       repo: this.config.repo,
@@ -56,7 +64,9 @@ export class GitHubStorageProvider implements IStorageProvider {
     const content = Buffer.from(response.data.content, "base64").toString(
       "utf-8"
     );
-    return JSON.parse(content) as T;
+    const result = JSON.parse(content) as T;
+    this.cache.set(path, result);
+    return result;
   }
 
   async writeJson<T>(path: string, content: T, message: string): Promise<void> {
@@ -86,5 +96,7 @@ export class GitHubStorageProvider implements IStorageProvider {
       content: Buffer.from(JSON.stringify(content, null, 2)).toString("base64"),
       sha,
     });
+
+    this.cache.delete(path);
   }
 }
