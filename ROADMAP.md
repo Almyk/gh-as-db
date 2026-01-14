@@ -18,7 +18,7 @@ This document outlines the planned features and milestones for `gh-as-db`.
 
 ## Phase 3: Developer Experience & Performance
 - [x] **Caching Layer**: In-memory caching to reduce GitHub API calls.
-- [ ] **Auto-indexing**: Simple indexing for faster local querying.
+- [x] **Auto-indexing**: Simple indexing for faster local querying.
 - [x] **CLI Tool**: A command-line utility for initializing repos, managing collections, and inspecting data.
 
 ## Phase 4: Production Readiness
