@@ -31,8 +31,8 @@ This document outlines the planned features and milestones for `gh-as-db`.
 - [x] **Improve Documentation**: Add more documentation and improve documentation.
 - [x] **Comprehensive Documentation**: Detailed API reference and tutorials.
 
-## Publish to NPM
-- [ ] **Publish to NPM**: Publish the package to NPM.
+## Phase 5: Release
+- [x] **Publish to NPM**: Initial 1.0.0 release on NPM.
 
 ---
 
