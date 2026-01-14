@@ -19,6 +19,9 @@ describe("Collection Advanced Querying", () => {
       exists: vi.fn().mockResolvedValue(true),
       readJson: vi.fn().mockResolvedValue({ data: testData, sha: "test-sha" }),
       writeJson: vi.fn().mockResolvedValue("new-sha"),
+      commit: vi.fn().mockResolvedValue("batch-sha"),
+      deleteFile: vi.fn(),
+      listDirectory: vi.fn(),
     };
     collection = new Collection("users", mockStorage);
   });

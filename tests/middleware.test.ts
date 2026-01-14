@@ -11,6 +11,9 @@ describe("Middleware Support", () => {
       exists: vi.fn().mockResolvedValue(true),
       readJson: vi.fn().mockResolvedValue({ data: [], sha: "test-sha" }),
       writeJson: vi.fn().mockResolvedValue("new-sha"),
+      commit: vi.fn().mockResolvedValue("batch-sha"),
+      deleteFile: vi.fn(),
+      listDirectory: vi.fn(),
     };
   });
 
