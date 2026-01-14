@@ -3,7 +3,7 @@
 This document outlines the planned features and milestones for `gh-as-db`.
 
 ## Phase 1: Core Functionality (Current Focus)
-- [ ] **Connection Management**: Robust connection to GitHub repositories via Personal Access Tokens.
+- [x] **Connection Management**: Robust connection to GitHub repositories via Personal Access Tokens.
 - [ ] **Schema Definition**: Basic TypeScript-based schema definitions for "tables" (JSON files).
 - [ ] **CRUD Operations**:
     - [ ] `create`: Insert new records into a JSON collection.
