@@ -1,4 +1,9 @@
-import { GitHubDBConfig, IStorageProvider, Schema } from "../core/types.js";
+import {
+  GitHubDBConfig,
+  IStorageProvider,
+  Middleware,
+  Schema,
+} from "../core/types.js";
 import { GitHubStorageProvider } from "../infrastructure/github-storage.js";
 import { Collection } from "./collection.js";
 
@@ -23,7 +28,10 @@ export class GitHubDB {
     return this.storage.testConnection();
   }
 
-  collection<T extends Schema>(name: string): Collection<T> {
-    return new Collection<T>(name, this.storage);
+  collection<T extends Schema>(
+    name: string,
+    options: { middleware?: Middleware<T>[] } = {}
+  ): Collection<T> {
+    return new Collection<T>(name, this.storage, options.middleware);
   }
 }

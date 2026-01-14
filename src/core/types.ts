@@ -6,6 +6,18 @@ export interface GitHubDBConfig {
 
 export type Schema = Record<string, any>;
 
+export type MiddlewareOperation = "create" | "update" | "read" | "delete";
+
+export interface MiddlewareContext {
+  collection: string;
+  operation: MiddlewareOperation;
+}
+
+export interface Middleware<T extends Schema> {
+  beforeSave?: (item: T, context: MiddlewareContext) => Promise<T> | T;
+  afterRead?: (item: T, context: MiddlewareContext) => Promise<T> | T;
+}
+
 export type FilterOperator =
   | "eq"
   | "neq"

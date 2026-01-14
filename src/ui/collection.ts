@@ -1,11 +1,18 @@
-import { IStorageProvider, QueryOptions, Schema } from "../core/types.js";
+import {
+  IStorageProvider,
+  Middleware,
+  MiddlewareContext,
+  QueryOptions,
+  Schema,
+} from "../core/types.js";
 
 export class Collection<T extends Schema> {
   private lastSha: string | undefined;
 
   constructor(
     public readonly name: string,
-    private readonly storage: IStorageProvider
+    private readonly storage: IStorageProvider,
+    private readonly middleware: Middleware<T>[] = []
   ) {}
 
   private get path(): string {
@@ -13,6 +20,18 @@ export class Collection<T extends Schema> {
   }
 
   async create(item: T): Promise<T> {
+    let finalItem = item;
+    const context: MiddlewareContext = {
+      collection: this.name,
+      operation: "create",
+    };
+
+    for (const mw of this.middleware) {
+      if (mw.beforeSave) {
+        finalItem = await mw.beforeSave(finalItem, context);
+      }
+    }
+
     let items: T[] = [];
     try {
       if (await this.storage.exists(this.path)) {
@@ -24,14 +43,14 @@ export class Collection<T extends Schema> {
       // If file doesn't exist, start with empty array
     }
 
-    items.push(item);
+    items.push(finalItem);
     this.lastSha = await this.storage.writeJson(
       this.path,
       items,
       `Add item to ${this.name}`,
       this.lastSha
     );
-    return item;
+    return finalItem;
   }
 
   async find(
@@ -43,6 +62,23 @@ export class Collection<T extends Schema> {
     const response = await this.storage.readJson<T[]>(this.path);
     this.lastSha = response.sha;
     let items = response.data;
+
+    const context: MiddlewareContext = {
+      collection: this.name,
+      operation: "read",
+    };
+
+    items = await Promise.all(
+      items.map(async (item) => {
+        let currentItem = item;
+        for (const mw of this.middleware) {
+          if (mw.afterRead) {
+            currentItem = await mw.afterRead(currentItem, context);
+          }
+        }
+        return currentItem;
+      })
+    );
 
     if (typeof queryOrPredicate === "function") {
       return items.filter(queryOrPredicate);
@@ -125,6 +161,20 @@ export class Collection<T extends Schema> {
     }
 
     items[index] = { ...items[index], ...updates };
+
+    let finalItem = items[index];
+    const context: MiddlewareContext = {
+      collection: this.name,
+      operation: "update",
+    };
+
+    for (const mw of this.middleware) {
+      if (mw.beforeSave) {
+        finalItem = await mw.beforeSave(finalItem, context);
+      }
+    }
+    items[index] = finalItem;
+
     this.lastSha = await this.storage.writeJson(
       this.path,
       items,
