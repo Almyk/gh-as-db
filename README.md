@@ -11,7 +11,11 @@ Use a private GitHub repository as a database for your application. `gh-as-db` p
 - 🔐 **Secure**: Designed for private repositories using Personal Access Tokens (PAT).
 - 🚀 **Performance**: Built-in in-memory caching and auto-indexing for fast local queries.
 - 🛡️ **Concurrency**: Optimistic locking using Git SHAs to prevent data loss.
+- 🔗 **Transactions**: Group multiple operations into a single atomic Git commit.
+- 📁 **Sharding**: One-file-per-document storage strategy for massive collections.
 - 🧩 **Middleware**: Extensible hooks for data validation or transformation.
+- 🔀 **Validation**: Pluggable schema validation support (Zod, etc.).
+- 🌐 **Edge Ready**: Fully compatible with Vercel Edge and Cloudflare Workers.
 - ⌨️ **CLI Tool**: Initialize and manage your "database" from the terminal.
 - 📦 **TypeScript**: Fully typed for a great developer experience.
 
@@ -58,6 +62,15 @@ const results = await users.find({
     { field: 'name', operator: 'eq', value: 'John Doe' }
   ]
 });
+
+// Use Transactions for atomic multi-collection updates
+await db.transaction(async (tx) => {
+  const usersTx = tx.collection('users');
+  const logsTx = tx.collection('logs');
+  
+  await usersTx.update('1', { name: 'Updated Name' });
+  await logsTx.create({ id: 'log-1', action: 'Update user' });
+}, 'Atomic update of user and logs');
 ```
 
 ## API Reference
@@ -130,6 +143,55 @@ const users = db.collection<User>('users', {
   }]
 });
 ```
+
+### Schema Validation
+
+You can use any validation library (Zod, Valibot, etc.) by providing a `validator` object.
+
+```typescript
+import { z } from 'zod';
+
+const userSchema = z.object({
+  id: z.string(),
+  name: z.string().min(3),
+  email: z.string().email(),
+});
+
+const users = db.collection<User>('users', {
+  validator: {
+    validate: (data) => userSchema.parseAsync(data),
+  }
+});
+```
+
+### Transactions & Batching
+
+Transactions allow you to group multiple operations across different collections into a **single Git commit**. This reduces API calls and ensures that either all operations succeed or none are committed.
+
+```typescript
+const commitSha = await db.transaction(async (tx) => {
+  const posts = tx.collection('posts');
+  const count = tx.collection('stats');
+
+  await posts.create({ id: 'p1', title: 'New Post' });
+  await count.update('total', { value: 101 });
+}, 'Create post and increment counter');
+```
+
+### Storage Strategies (Sharding)
+
+By default, `gh-as-db` stores the entire collection in a single JSON file (`name.json`). For large collections, you can use the `sharded` strategy, which stores **one file per document** (`name/id.json`).
+
+```typescript
+const users = db.collection<User>('users', {
+  strategy: 'sharded'
+});
+```
+
+**Why use Sharding?**
+- 🚀 **Performance**: `findById` reads only the specific file, which is much faster than loading a massive JSON array.
+- 📈 **Scalability**: Avoids GitHub's file size limits and reduces merge conflicts.
+- 🧹 **Cleanliness**: Better organization for repositories with thousands of documents.
 
 ## CLI Usage
 

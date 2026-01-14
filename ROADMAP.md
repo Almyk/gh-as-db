@@ -35,10 +35,10 @@ This document outlines the planned features and milestones for `gh-as-db`.
 - [x] **Publish to NPM**: Initial 1.0.0 release on NPM.
 
 ## Phase 6: Production Hardening & Scalability
-- [ ] **Batching & Transactions**: Implement a `transaction` API to group multiple operations into a single Git commit using the low-level Git Data API.
-- [ ] **Sharding (One-File-Per-Document)**: Add a storage strategy option to store items as individual files to prevent "JSON bloat" and improve scalability.
-- [ ] **Zod Integration**: First-class support for Zod schemas for runtime validation and better type safety.
-- [ ] **Edge Compatibility Auditing**: Ensure the library and its dependencies are fully compatible with Vercel Edge and Cloudflare Workers (removing Node-only dependencies).
+- [x] **Batching & Transactions**: Implement a `transaction` API to group multiple operations into a single Git commit using the low-level Git Data API.
+- [x] **Sharding (One-File-Per-Document)**: Add a storage strategy option to store items as individual files to prevent "JSON bloat" and improve scalability.
+- [x] **Generic Schema Validation**: First-class support for pluggable validation (Zod, Valibot, etc.) for runtime safety.
+- [x] **Edge Compatibility Auditing**: Ensure the library and its dependencies are fully compatible with Vercel Edge and Cloudflare Workers (removing Node-only dependencies).
 
 ## Phase 7: Advanced Git DB Features
 - [ ] **History API**: Methods to retrieve the version history of specific documents or collections.
