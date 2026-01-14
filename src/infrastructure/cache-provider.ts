@@ -1,19 +1,24 @@
+export interface CacheEntry<T> {
+  data: T;
+  sha: string;
+}
+
 export interface ICacheProvider {
-  get<T>(key: string): T | null;
-  set<T>(key: string, value: T, ttl?: number): void;
+  get<T>(key: string): CacheEntry<T> | null;
+  set<T>(key: string, value: CacheEntry<T>, ttl?: number): void;
   delete(key: string): void;
   clear(): void;
 }
 
-interface CacheEntry<T> {
-  value: T;
+interface InternalCacheEntry<T> {
+  data: CacheEntry<T>;
   expiry: number | null;
 }
 
 export class MemoryCacheProvider implements ICacheProvider {
-  private cache = new Map<string, CacheEntry<any>>();
+  private cache = new Map<string, InternalCacheEntry<any>>();
 
-  get<T>(key: string): T | null {
+  get<T>(key: string): CacheEntry<T> | null {
     const entry = this.cache.get(key);
     if (!entry) return null;
 
@@ -22,12 +27,12 @@ export class MemoryCacheProvider implements ICacheProvider {
       return null;
     }
 
-    return entry.value;
+    return entry.data;
   }
 
-  set<T>(key: string, value: T, ttl?: number): void {
+  set<T>(key: string, value: CacheEntry<T>, ttl?: number): void {
     const expiry = ttl ? Date.now() + ttl : null;
-    this.cache.set(key, { value, expiry });
+    this.cache.set(key, { data: value, expiry });
   }
 
   delete(key: string): void {

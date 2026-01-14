@@ -40,9 +40,26 @@ export interface QueryOptions<T> {
   pagination?: PaginationOptions;
 }
 
+export class ConcurrencyError extends Error {
+  constructor(public readonly path: string) {
+    super(`Concurrency conflict at ${path}. The remote data has changed.`);
+    this.name = "ConcurrencyError";
+  }
+}
+
+export interface StorageResponse<T> {
+  data: T;
+  sha: string;
+}
+
 export interface IStorageProvider {
   testConnection(): Promise<boolean>;
   exists(path: string): Promise<boolean>;
-  readJson<T>(path: string): Promise<T>;
-  writeJson<T>(path: string, content: T, message: string): Promise<void>;
+  readJson<T>(path: string): Promise<StorageResponse<T>>;
+  writeJson<T>(
+    path: string,
+    content: T,
+    message: string,
+    sha?: string
+  ): Promise<string>;
 }

@@ -1,6 +1,8 @@
 import { IStorageProvider, QueryOptions, Schema } from "../core/types.js";
 
 export class Collection<T extends Schema> {
+  private lastSha: string | undefined;
+
   constructor(
     public readonly name: string,
     private readonly storage: IStorageProvider
@@ -14,14 +16,21 @@ export class Collection<T extends Schema> {
     let items: T[] = [];
     try {
       if (await this.storage.exists(this.path)) {
-        items = await this.storage.readJson<T[]>(this.path);
+        const response = await this.storage.readJson<T[]>(this.path);
+        items = response.data;
+        this.lastSha = response.sha;
       }
     } catch (error) {
       // If file doesn't exist, start with empty array
     }
 
     items.push(item);
-    await this.storage.writeJson(this.path, items, `Add item to ${this.name}`);
+    this.lastSha = await this.storage.writeJson(
+      this.path,
+      items,
+      `Add item to ${this.name}`,
+      this.lastSha
+    );
     return item;
   }
 
@@ -31,7 +40,9 @@ export class Collection<T extends Schema> {
     if (!(await this.storage.exists(this.path))) {
       return [];
     }
-    let items = await this.storage.readJson<T[]>(this.path);
+    const response = await this.storage.readJson<T[]>(this.path);
+    this.lastSha = response.sha;
+    let items = response.data;
 
     if (typeof queryOrPredicate === "function") {
       return items.filter(queryOrPredicate);
@@ -114,10 +125,11 @@ export class Collection<T extends Schema> {
     }
 
     items[index] = { ...items[index], ...updates };
-    await this.storage.writeJson(
+    this.lastSha = await this.storage.writeJson(
       this.path,
       items,
-      `Update item ${id} in ${this.name}`
+      `Update item ${id} in ${this.name}`,
+      this.lastSha
     );
     return items[index];
   }
@@ -128,10 +140,11 @@ export class Collection<T extends Schema> {
     if (filtered.length === items.length) {
       return; // Or throw error? Let's be idempotent for now.
     }
-    await this.storage.writeJson(
+    this.lastSha = await this.storage.writeJson(
       this.path,
       filtered,
-      `Delete item ${id} from ${this.name}`
+      `Delete item ${id} from ${this.name}`,
+      this.lastSha
     );
   }
 }

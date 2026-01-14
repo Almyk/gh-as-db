@@ -17,8 +17,8 @@ describe("Collection Advanced Querying", () => {
     mockStorage = {
       testConnection: vi.fn(),
       exists: vi.fn().mockResolvedValue(true),
-      readJson: vi.fn().mockResolvedValue(testData),
-      writeJson: vi.fn(),
+      readJson: vi.fn().mockResolvedValue({ data: testData, sha: "test-sha" }),
+      writeJson: vi.fn().mockResolvedValue("new-sha"),
     };
     collection = new Collection("users", mockStorage);
   });

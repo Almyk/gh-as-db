@@ -30,7 +30,11 @@ describe("Caching Layer", () => {
     vi.spyOn(
       (storage as any).octokit.repos,
       "createOrUpdateFileContents"
-    ).mockResolvedValue({});
+    ).mockResolvedValue({
+      data: {
+        content: { sha: "new-sha" },
+      },
+    });
   });
 
   it("should cache read results", async () => {
@@ -42,7 +46,8 @@ describe("Caching Layer", () => {
 
     // Second read - should hit cache
     const result = await storage.readJson(path);
-    expect(result).toEqual({ hello: "world" });
+    expect(result.data).toEqual({ hello: "world" });
+    expect(result.sha).toBe("test-sha");
     expect((storage as any).octokit.repos.getContent).toHaveBeenCalledTimes(1);
   });
 
@@ -68,7 +73,7 @@ describe("Caching Layer", () => {
     const path = "expiry.json";
     const ttl = 100; // 100ms
 
-    mockCache.set(path, { data: "temp" }, ttl);
+    mockCache.set(path, { data: "temp", sha: "temp-sha" }, ttl);
 
     expect(mockCache.get(path)).not.toBeNull();
 

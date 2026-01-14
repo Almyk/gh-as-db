@@ -22,7 +22,7 @@ This document outlines the planned features and milestones for `gh-as-db`.
 - [ ] **CLI Tool**: A command-line utility for initializing repos, managing collections, and inspecting data.
 
 ## Phase 4: Production Readiness
-- [ ] **Transaction Support**: Basic optimistic concurrency control using Git SHAs.
+- [x] **Transaction Support**: Optimistic concurrency control using Git SHAs.
 - [ ] **Middleware Support**: Hooks for data validation or transformation.
 - [ ] **Comprehensive Documentation**: Detailed API reference and tutorials.
 
