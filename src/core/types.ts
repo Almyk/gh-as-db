@@ -2,6 +2,7 @@ export interface GitHubDBConfig {
   accessToken: string;
   owner: string;
   repo: string;
+  branch?: string;
   cacheTTL?: number;
 }
 
@@ -65,6 +66,17 @@ export interface StorageResponse<T> {
   sha: string;
 }
 
+export interface Validator<T> {
+  validate: (data: unknown) => Promise<T> | T;
+}
+
+export interface CommitChange {
+  path: string;
+  content: any;
+}
+
+export type StorageStrategy = "single-file" | "sharded";
+
 export interface IStorageProvider {
   testConnection(): Promise<boolean>;
   exists(path: string): Promise<boolean>;
@@ -75,4 +87,9 @@ export interface IStorageProvider {
     message: string,
     sha?: string
   ): Promise<string>;
+  deleteFile(path: string, message: string, sha: string): Promise<void>;
+  listDirectory(
+    path: string
+  ): Promise<{ path: string; sha: string; type: "file" | "dir" }[]>;
+  commit(changes: CommitChange[], message: string): Promise<string>;
 }

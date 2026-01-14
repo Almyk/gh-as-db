@@ -5,6 +5,8 @@ import {
   MiddlewareContext,
   QueryOptions,
   Schema,
+  StorageStrategy,
+  Validator,
 } from "../core/types.js";
 import { Indexer } from "../core/indexer.js";
 
@@ -13,19 +15,51 @@ export class Collection<T extends Schema> {
   private indexer = new Indexer<T>();
   private items: T[] = [];
   private dataLoaded = false;
+  private middleware: Middleware<T>[];
+  private validator?: Validator<T>;
+  private strategy: StorageStrategy;
+  private shas = new Map<string, string>(); // path -> sha for sharded mode
 
   constructor(
     public readonly name: string,
     private readonly storage: IStorageProvider,
-    private readonly middleware: Middleware<T>[] = []
-  ) { }
+    middlewareOrOptions?:
+      | Middleware<T>[]
+      | {
+          middleware?: Middleware<T>[];
+          validator?: Validator<T>;
+          strategy?: StorageStrategy;
+        }
+  ) {
+    if (Array.isArray(middlewareOrOptions)) {
+      this.middleware = middlewareOrOptions;
+      this.strategy = "single-file";
+    } else {
+      this.middleware = middlewareOrOptions?.middleware || [];
+      this.validator = middlewareOrOptions?.validator;
+      this.strategy = middlewareOrOptions?.strategy || "single-file";
+    }
+  }
 
   private get path(): string {
-    return `${this.name}.json`;
+    return this.strategy === "sharded" ? `${this.name}/` : `${this.name}.json`;
+  }
+
+  private getItemPath(id: string): string {
+    return this.strategy === "sharded"
+      ? `${this.name}/${id}.json`
+      : `${this.name}.json`;
   }
 
   async create(item: T): Promise<T> {
     let finalItem = item;
+
+    // 1. Validation
+    if (this.validator) {
+      finalItem = await this.validator.validate(finalItem);
+    }
+
+    // 2. Middleware
     const context: MiddlewareContext = {
       collection: this.name,
       operation: "create",
@@ -35,6 +69,28 @@ export class Collection<T extends Schema> {
       if (mw.beforeSave) {
         finalItem = await mw.beforeSave(finalItem, context);
       }
+    }
+
+    if (this.strategy === "sharded") {
+      const itemPath = this.getItemPath(finalItem.id);
+      const sha = await this.storage.writeJson(
+        itemPath,
+        finalItem,
+        `Create item ${finalItem.id} in ${this.name}`,
+        this.shas.get(itemPath)
+      );
+      this.shas.set(itemPath, sha);
+
+      if (this.dataLoaded) {
+        const index = this.items.findIndex((i: any) => i.id === finalItem.id);
+        if (index > -1) {
+          this.items[index] = finalItem;
+        } else {
+          this.items.push(finalItem);
+        }
+        this.indexer.add(finalItem);
+      }
+      return finalItem;
     }
 
     let items: T[] = [];
@@ -116,9 +172,22 @@ export class Collection<T extends Schema> {
       return this.items;
     }
 
-    const response = await this.storage.readJson<T[]>(this.path);
-    this.lastSha = response.sha;
-    items = response.data;
+    if (this.strategy === "sharded") {
+      const files = await this.storage.listDirectory(this.name);
+      items = await Promise.all(
+        files
+          .filter((f) => f.type === "file" && f.path.endsWith(".json"))
+          .map(async (file) => {
+            const response = await this.storage.readJson<T>(file.path);
+            this.shas.set(file.path, response.sha);
+            return response.data;
+          })
+      );
+    } else {
+      const response = await this.storage.readJson<T[]>(this.path);
+      this.lastSha = response.sha;
+      items = response.data;
+    }
 
     items = await Promise.all(
       items.map(async (item) => {
@@ -217,6 +286,34 @@ export class Collection<T extends Schema> {
       const results = this.indexer.query("id" as keyof T, id);
       return results && results.length > 0 ? results[0] : null;
     }
+
+    if (this.strategy === "sharded") {
+      try {
+        const itemPath = this.getItemPath(id);
+        const response = await this.storage.readJson<T>(itemPath);
+        this.shas.set(itemPath, response.sha);
+
+        let finalItem = response.data;
+        const context: MiddlewareContext = {
+          collection: this.name,
+          operation: "read",
+        };
+
+        for (const mw of this.middleware) {
+          if (mw.afterRead) {
+            finalItem = await mw.afterRead(finalItem, context);
+          }
+        }
+
+        // If data is not fully loaded, we don't update this.items yet to avoid partial consistency
+        // But if someone calls find() later it will load everything.
+        return finalItem;
+      } catch (error: any) {
+        if (error.status === 404) return null;
+        throw error;
+      }
+    }
+
     const items = await this.find();
     return items.find((item: any) => item.id === id) || null;
   }
@@ -232,6 +329,13 @@ export class Collection<T extends Schema> {
     items[index] = { ...items[index], ...updates };
 
     let finalItem = items[index];
+
+    // 1. Validation
+    if (this.validator) {
+      finalItem = await this.validator.validate(finalItem);
+    }
+
+    // 2. Middleware
     const context: MiddlewareContext = {
       collection: this.name,
       operation: "update",
@@ -244,18 +348,36 @@ export class Collection<T extends Schema> {
     }
     items[index] = finalItem;
 
-    try {
-      this.lastSha = await this.storage.writeJson(
-        this.path,
-        items,
-        `Update item ${id} in ${this.name}`,
-        this.lastSha
-      );
-    } catch (error) {
-      if (error instanceof ConcurrencyError) {
-        this.dataLoaded = false;
+    if (this.strategy === "sharded") {
+      const itemPath = this.getItemPath(id);
+      try {
+        const sha = await this.storage.writeJson(
+          itemPath,
+          finalItem,
+          `Update item ${id} in ${this.name}`,
+          this.shas.get(itemPath)
+        );
+        this.shas.set(itemPath, sha);
+      } catch (error) {
+        if (error instanceof ConcurrencyError) {
+          this.dataLoaded = false;
+        }
+        throw error;
       }
-      throw error;
+    } else {
+      try {
+        this.lastSha = await this.storage.writeJson(
+          this.path,
+          items,
+          `Update item ${id} in ${this.name}`,
+          this.lastSha
+        );
+      } catch (error) {
+        if (error instanceof ConcurrencyError) {
+          this.dataLoaded = false;
+        }
+        throw error;
+      }
     }
 
     if (this.dataLoaded) {
@@ -276,18 +398,39 @@ export class Collection<T extends Schema> {
     const itemToDelete = items[index];
     const filtered = items.filter((_, i) => i !== index);
 
-    try {
-      this.lastSha = await this.storage.writeJson(
-        this.path,
-        filtered,
-        `Delete item ${id} from ${this.name}`,
-        this.lastSha
-      );
-    } catch (error) {
-      if (error instanceof ConcurrencyError) {
-        this.dataLoaded = false;
+    if (this.strategy === "sharded") {
+      const itemPath = this.getItemPath(id);
+      const sha = this.shas.get(itemPath);
+      if (!sha) {
+        // We need the SHA to delete. If we don't have it, we must fetch it.
+        const response = await this.storage.readJson(itemPath);
+        await this.storage.deleteFile(
+          itemPath,
+          `Delete item ${id} from ${this.name}`,
+          response.sha
+        );
+      } else {
+        await this.storage.deleteFile(
+          itemPath,
+          `Delete item ${id} from ${this.name}`,
+          sha
+        );
       }
-      throw error;
+      this.shas.delete(itemPath);
+    } else {
+      try {
+        this.lastSha = await this.storage.writeJson(
+          this.path,
+          filtered,
+          `Delete item ${id} from ${this.name}`,
+          this.lastSha
+        );
+      } catch (error) {
+        if (error instanceof ConcurrencyError) {
+          this.dataLoaded = false;
+        }
+        throw error;
+      }
     }
 
     if (this.dataLoaded) {

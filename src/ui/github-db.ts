@@ -3,9 +3,12 @@ import {
   IStorageProvider,
   Middleware,
   Schema,
+  Validator,
 } from "../core/types.js";
 import { GitHubStorageProvider } from "../infrastructure/github-storage.js";
 import { Collection } from "./collection.js";
+
+import { Transaction } from "./transaction.js";
 
 export class GitHubDB {
   public readonly storage: IStorageProvider;
@@ -30,8 +33,17 @@ export class GitHubDB {
 
   collection<T extends Schema>(
     name: string,
-    options: { middleware?: Middleware<T>[] } = {}
+    options: { middleware?: Middleware<T>[]; validator?: Validator<T> } = {}
   ): Collection<T> {
-    return new Collection<T>(name, this.storage, options.middleware);
+    return new Collection<T>(name, this.storage, options);
+  }
+
+  async transaction(
+    fn: (tx: Transaction) => Promise<void>,
+    message: string = "Transaction commit"
+  ): Promise<string> {
+    const tx = new Transaction(this.storage);
+    await fn(tx);
+    return tx.commit(message);
   }
 }
