@@ -31,6 +31,9 @@ This document outlines the planned features and milestones for `gh-as-db`.
 - [x] **Improve Documentation**: Add more documentation and improve documentation.
 - [x] **Comprehensive Documentation**: Detailed API reference and tutorials.
 
+## Publish to NPM
+- [ ] **Publish to NPM**: Publish the package to NPM.
+
 ---
 
 *Note: This roadmap is subject to change as the project evolves.*
