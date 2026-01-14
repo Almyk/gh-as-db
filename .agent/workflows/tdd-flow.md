@@ -23,5 +23,5 @@ Follow these steps for every new feature or bug fix.
     - Improve code structure without changing behavior.
     - Run tests again to ensure no regression.
 8.  **Update Roadmap**: Mark the implemented feature as completed in `ROADMAP.md`.
-9.  **Propose Commit Message**: Suggest a succinct git commit message for the changes. Should start with a capitalized verb.
+9.  **Propose Commit Message**: Suggest a succinct git commit message for the changes. Should start with a capitalized verb (Add, Implement, Refactor, Remove).
 10. **Finalize**: Update documentation if necessary.

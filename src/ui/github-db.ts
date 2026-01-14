@@ -1,5 +1,6 @@
-import { GitHubDBConfig, IStorageProvider } from "../core/types.js";
+import { GitHubDBConfig, IStorageProvider, Schema } from "../core/types.js";
 import { GitHubStorageProvider } from "../infrastructure/github-storage.js";
+import { Collection } from "./collection.js";
 
 export class GitHubDB {
   public readonly storage: IStorageProvider;
@@ -20,5 +21,9 @@ export class GitHubDB {
 
   async connect(): Promise<boolean> {
     return this.storage.testConnection();
+  }
+
+  collection<T extends Schema>(name: string): Collection<T> {
+    return new Collection<T>(name);
   }
 }

@@ -21,4 +21,20 @@ export class GitHubStorageProvider implements IStorageProvider {
       return false;
     }
   }
+
+  async exists(path: string): Promise<boolean> {
+    try {
+      await this.octokit.repos.getContent({
+        owner: this.config.owner,
+        repo: this.config.repo,
+        path,
+      });
+      return true;
+    } catch (error: any) {
+      if (error.status === 404) {
+        return false;
+      }
+      throw error;
+    }
+  }
 }
