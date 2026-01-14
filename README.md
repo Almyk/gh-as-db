@@ -71,7 +71,7 @@ const db = new GitHubDB({
   accessToken: string; // GitHub PAT with 'repo' scope
   owner: string;       // Repository owner
   repo: string;        // Repository name
-  branch?: string;     // Optional: branch to use (defaults to 'main')
+  cacheTTL?: number;   // Optional: Cache TTL in ms. Default is 0 (strict consistency).
 });
 ```
 
@@ -155,7 +155,8 @@ For small projects, side-projects, or internal tools, setting up a database serv
 
 ## Performance
 
-- **Caching**: Data is fetched once and cached in memory. Subsequent reads are near-instant.
+- **Consistent Caching**: Uses **Conditional GET** (`If-None-Match`) to ensure data is always up-to-date even across multiple instances (e.g., serverless), while minimizing API costs.
+- **Write-Through**: Updates the local cache immediately after a write, preventing 404s during redirects.
 - **Indexing**: Automatic in-memory indexing on all fields makes querying fast even as data grows.
 - **Optimistic Concurrency**: Uses Git SHAs to ensure that you don't overwrite changes made by another client.
 

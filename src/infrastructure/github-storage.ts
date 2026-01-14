@@ -10,10 +10,12 @@ import { ICacheProvider, MemoryCacheProvider } from "./cache-provider.js";
 export class GitHubStorageProvider implements IStorageProvider {
   private octokit: Octokit;
   private cache: ICacheProvider;
+  private staleCache = new Map<string, StorageResponse<any>>();
+  private readonly DEFAULT_TTL = 0; // Default to 0 for consistency
 
   constructor(private config: GitHubDBConfig, cache?: ICacheProvider) {
     this.octokit = new Octokit({
-      auth: config.accessToken,
+      auth: this.config.accessToken,
     });
     this.cache = cache || new MemoryCacheProvider();
   }
@@ -31,6 +33,10 @@ export class GitHubStorageProvider implements IStorageProvider {
   }
 
   async exists(path: string): Promise<boolean> {
+    if (this.cache.get(path) || this.staleCache.has(path)) {
+      return true;
+    }
+
     try {
       await this.octokit.repos.getContent({
         owner: this.config.owner,
@@ -47,34 +53,54 @@ export class GitHubStorageProvider implements IStorageProvider {
   }
 
   async readJson<T>(path: string): Promise<StorageResponse<T>> {
-    const cached = this.cache.get<T>(path);
-    if (cached) {
-      return cached;
+    // 1. Check fresh cache (blind trust)
+    const fresh = this.cache.get<T>(path);
+    if (fresh) {
+      return fresh;
     }
 
-    const response = await this.octokit.repos.getContent({
-      owner: this.config.owner,
-      repo: this.config.repo,
-      path,
-    });
+    // 2. Check stale cache for conditional request
+    const stale = this.staleCache.get(path) as StorageResponse<T> | undefined;
 
-    if (Array.isArray(response.data)) {
-      throw new Error("Path is a directory, not a file");
+    try {
+      const response = await this.octokit.repos.getContent({
+        owner: this.config.owner,
+        repo: this.config.repo,
+        path,
+        headers: stale ? { "if-none-match": `"${stale.sha}"` } : {},
+      });
+
+      if (Array.isArray(response.data)) {
+        throw new Error("Path is a directory, not a file");
+      }
+
+      if (!("content" in response.data) || !("sha" in response.data)) {
+        throw new Error("No content or SHA in response");
+      }
+
+      const content = Buffer.from(response.data.content, "base64").toString(
+        "utf-8"
+      );
+      const result = {
+        data: JSON.parse(content) as T,
+        sha: response.data.sha,
+      };
+
+      // Update both caches
+      const ttl = this.config.cacheTTL ?? this.DEFAULT_TTL;
+      this.cache.set(path, result, ttl);
+      this.staleCache.set(path, result);
+
+      return result;
+    } catch (error: any) {
+      if (error.status === 304 && stale) {
+        // Re-cache as fresh and return stale data
+        const ttl = this.config.cacheTTL ?? this.DEFAULT_TTL;
+        this.cache.set(path, stale, ttl);
+        return stale;
+      }
+      throw error;
     }
-
-    if (!("content" in response.data) || !("sha" in response.data)) {
-      throw new Error("No content or SHA in response");
-    }
-
-    const content = Buffer.from(response.data.content, "base64").toString(
-      "utf-8"
-    );
-    const result = {
-      data: JSON.parse(content) as T,
-      sha: response.data.sha,
-    };
-    this.cache.set(path, result);
-    return result;
   }
 
   async writeJson<T>(
@@ -86,19 +112,24 @@ export class GitHubStorageProvider implements IStorageProvider {
     let internalSha = sha;
 
     if (!internalSha) {
-      try {
-        const existing = await this.octokit.repos.getContent({
-          owner: this.config.owner,
-          repo: this.config.repo,
-          path,
-        });
+      const cached = this.cache.get<any>(path) || this.staleCache.get(path);
+      if (cached) {
+        internalSha = cached.sha;
+      } else {
+        try {
+          const existing = await this.octokit.repos.getContent({
+            owner: this.config.owner,
+            repo: this.config.repo,
+            path,
+          });
 
-        if (!Array.isArray(existing.data) && "sha" in existing.data) {
-          internalSha = existing.data.sha;
-        }
-      } catch (error: any) {
-        if (error.status !== 404) {
-          throw error;
+          if (!Array.isArray(existing.data) && "sha" in existing.data) {
+            internalSha = existing.data.sha;
+          }
+        } catch (error: any) {
+          if (error.status !== 404) {
+            throw error;
+          }
         }
       }
     }
@@ -116,7 +147,12 @@ export class GitHubStorageProvider implements IStorageProvider {
       });
 
       const newSha = response.data.content?.sha || "";
-      this.cache.delete(path);
+      const result = { data: content, sha: newSha };
+      const ttl = this.config.cacheTTL ?? this.DEFAULT_TTL;
+
+      this.cache.set(path, result, ttl);
+      this.staleCache.set(path, result);
+
       return newSha;
     } catch (error: any) {
       if (error.status === 409) {

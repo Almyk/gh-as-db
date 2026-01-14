@@ -7,6 +7,7 @@ describe("Caching Layer", () => {
     accessToken: "test-token",
     owner: "test-owner",
     repo: "test-repo",
+    cacheTTL: 1000,
   };
 
   let storage: GitHubStorageProvider;
@@ -51,7 +52,7 @@ describe("Caching Layer", () => {
     expect((storage as any).octokit.repos.getContent).toHaveBeenCalledTimes(1);
   });
 
-  it("should invalidate cache on write", async () => {
+  it("should update cache on write", async () => {
     const path = "test.json";
 
     // First read to populate cache
@@ -59,14 +60,19 @@ describe("Caching Layer", () => {
     expect(mockCache.get(path)).not.toBeNull();
 
     // Write to the same path
-    await storage.writeJson(path, { new: "data" }, "Update");
+    const newData = { new: "data" };
+    await storage.writeJson(path, newData, "Update");
 
-    // Cache should be empty for that path
-    expect(mockCache.get(path)).toBeNull();
+    // Cache should now contain the NEW data
+    const cachedAfterWrite = mockCache.get(path);
+    expect(cachedAfterWrite).not.toBeNull();
+    expect(cachedAfterWrite?.data).toEqual(newData);
+    expect(cachedAfterWrite?.sha).toBe("new-sha");
 
-    // Next read should hit GitHub again
-    await storage.readJson(path);
-    expect((storage as any).octokit.repos.getContent).toHaveBeenCalledTimes(3);
+    // Next read should hit cache (still 1 call from the very first read)
+    const result = await storage.readJson(path);
+    expect(result.data).toEqual(newData);
+    expect((storage as any).octokit.repos.getContent).toHaveBeenCalledTimes(1);
   });
 
   it("should handle TTL expiry", async () => {

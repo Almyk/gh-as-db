@@ -22,7 +22,7 @@ export class MemoryCacheProvider implements ICacheProvider {
     const entry = this.cache.get(key);
     if (!entry) return null;
 
-    if (entry.expiry !== null && Date.now() > entry.expiry) {
+    if (entry.expiry !== null && Date.now() >= entry.expiry) {
       this.cache.delete(key);
       return null;
     }
@@ -31,7 +31,7 @@ export class MemoryCacheProvider implements ICacheProvider {
   }
 
   set<T>(key: string, value: CacheEntry<T>, ttl?: number): void {
-    const expiry = ttl ? Date.now() + ttl : null;
+    const expiry = ttl !== undefined ? Date.now() + ttl : null;
     this.cache.set(key, { data: value, expiry });
   }
 

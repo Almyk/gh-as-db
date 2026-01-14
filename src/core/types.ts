@@ -2,6 +2,7 @@ export interface GitHubDBConfig {
   accessToken: string;
   owner: string;
   repo: string;
+  cacheTTL?: number;
 }
 
 export type Schema = Record<string, any>;
