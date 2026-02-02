@@ -19,6 +19,12 @@ export interface Middleware<T extends Schema> {
   afterRead?: (item: T, context: MiddlewareContext) => Promise<T> | T;
 }
 
+export type StorageStrategy = "single-file" | "sharded";
+
+export interface Validator<T> {
+  validate(item: T): Promise<boolean> | boolean;
+}
+
 export type FilterOperator =
   | "eq"
   | "neq"

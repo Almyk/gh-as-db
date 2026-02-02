@@ -3,6 +3,8 @@ import {
   IStorageProvider,
   Middleware,
   Schema,
+  StorageStrategy,
+  Validator,
 } from "../core/types.js";
 import { GitHubStorageProvider } from "../infrastructure/github-storage.js";
 import { Collection } from "./collection.js";
@@ -30,8 +32,12 @@ export class GitHubDB {
 
   collection<T extends Schema>(
     name: string,
-    options: { middleware?: Middleware<T>[] } = {}
+    options: {
+      middleware?: Middleware<T>[];
+      validator?: Validator<T>;
+      strategy?: StorageStrategy;
+    } = {}
   ): Collection<T> {
-    return new Collection<T>(name, this.storage, options.middleware);
+    return new Collection<T>(name, this.storage, options);
   }
 }

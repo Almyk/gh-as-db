@@ -5,6 +5,8 @@ import {
   MiddlewareContext,
   QueryOptions,
   Schema,
+  StorageStrategy,
+  Validator,
 } from "../core/types.js";
 import { Indexer } from "../core/indexer.js";
 
@@ -14,11 +16,28 @@ export class Collection<T extends Schema> {
   private items: T[] = [];
   private dataLoaded = false;
 
+  private readonly middleware: Middleware<T>[];
+  private readonly validator?: Validator<T>;
+  private readonly strategy: StorageStrategy;
+
   constructor(
     public readonly name: string,
     private readonly storage: IStorageProvider,
-    private readonly middleware: Middleware<T>[] = []
-  ) { }
+    options: {
+      middleware?: Middleware<T>[];
+      validator?: Validator<T>;
+      strategy?: StorageStrategy;
+    } | Middleware<T>[] = []
+  ) {
+    if (Array.isArray(options)) {
+      this.middleware = options;
+      this.strategy = "single-file";
+    } else {
+      this.middleware = options.middleware || [];
+      this.validator = options.validator;
+      this.strategy = options.strategy || "single-file";
+    }
+  }
 
   private get path(): string {
     return `${this.name}.json`;
