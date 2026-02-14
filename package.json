@@ -1,6 +1,6 @@
 {
   "name": "gh-as-db",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Use a private GitHub repository as a database for your application.",
   "type": "module",
   "main": "./dist/index.js",

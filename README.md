@@ -11,6 +11,7 @@ Use a private GitHub repository as a database for your application. `gh-as-db` p
 - 🔐 **Secure**: Designed for private repositories using Personal Access Tokens (PAT).
 - 🚀 **Performance**: Built-in in-memory caching and auto-indexing for fast local queries.
 - 🛡️ **Concurrency**: Optimistic locking using Git SHAs to prevent data loss.
+- 🔄 **Retry & Rate Limits**: Automatic retries with exponential backoff for transient errors and GitHub rate limits.
 - 🔗 **Transactions**: Group multiple operations into a single atomic Git commit.
 - 📁 **Sharding**: One-file-per-document storage strategy for massive collections.
 - 🧩 **Middleware**: Extensible hooks for data validation or transformation.
@@ -85,6 +86,7 @@ const db = new GitHubDB({
   owner: string;       // Repository owner
   repo: string;        // Repository name
   cacheTTL?: number;   // Optional: Cache TTL in ms. Default is 0 (strict consistency).
+  retry?: RetryConfig | false; // Optional: Retry config, or false to disable. See below.
 });
 ```
 
@@ -193,6 +195,49 @@ const users = db.collection<User>('users', {
 - 📈 **Scalability**: Avoids GitHub's file size limits and reduces merge conflicts.
 - 🧹 **Cleanliness**: Better organization for repositories with thousands of documents.
 
+### Retry & Rate Limit Handling
+
+All GitHub API calls are automatically retried on transient errors (429 rate limits, 500/502/503 server errors) with exponential backoff. If GitHub returns a `Retry-After` header, it is respected.
+
+```typescript
+const db = new GitHubDB({
+  accessToken: process.env.GITHUB_TOKEN,
+  owner: 'your-username',
+  repo: 'my-data-repo',
+  retry: {
+    maxRetries: 3,   // Default: 3
+    baseDelay: 1000, // Default: 1000ms
+    maxDelay: 10000, // Default: 10000ms
+  }
+});
+```
+
+To disable retries entirely:
+
+```typescript
+const db = new GitHubDB({
+  // ...
+  retry: false,
+});
+```
+
+Non-transient errors (401, 403, 404) are thrown immediately without retrying. Concurrency conflicts (409) still throw `ConcurrencyError` immediately. If rate limit retries are exhausted, a `RateLimitError` is thrown.
+
+```typescript
+import { RateLimitError, ConcurrencyError } from 'gh-as-db';
+
+try {
+  await users.create({ id: '1', name: 'Alice' });
+} catch (error) {
+  if (error instanceof RateLimitError) {
+    console.log('Rate limited, retry after:', error.retryAfter);
+  }
+  if (error instanceof ConcurrencyError) {
+    console.log('Conflict, re-read and retry');
+  }
+}
+```
+
 ## CLI Usage
 
 `gh-as-db` comes with a CLI tool to help you manage your repository.
@@ -221,6 +266,7 @@ For small projects, side-projects, or internal tools, setting up a database serv
 - **Write-Through**: Updates the local cache immediately after a write, preventing 404s during redirects.
 - **Indexing**: Automatic in-memory indexing on all fields makes querying fast even as data grows.
 - **Optimistic Concurrency**: Uses Git SHAs to ensure that you don't overwrite changes made by another client.
+- **Automatic Retries**: Transient failures and rate limits are handled transparently with exponential backoff.
 
 ## License
 

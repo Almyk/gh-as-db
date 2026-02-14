@@ -26,7 +26,7 @@ This document outlines the planned features and milestones for `gh-as-db`.
 - [x] **Middleware Support**: Hooks for data validation or transformation.
 - [x] **Improve Tests**: Add more tests and improve test coverage.
 - [x] **Improve Performance**: Optimize performance and reduce memory usage via conditional GET caching.
-- [ ] **Improve Error Handling**: Add more error handling and improve error messages.
+- [x] **Improve Error Handling**: Retry with exponential backoff for transient errors (429, 5xx), `RateLimitError`, and `Retry-After` header support.
 - [ ] **Improve Logging**: Add more logging and improve logging messages.
 - [x] **Improve Documentation**: Add more documentation and improve documentation.
 - [x] **Comprehensive Documentation**: Detailed API reference and tutorials.
