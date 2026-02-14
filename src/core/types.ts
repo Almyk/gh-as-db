@@ -1,9 +1,16 @@
+export interface RetryConfig {
+  maxRetries?: number; // Default: 3
+  baseDelay?: number; // Default: 1000ms
+  maxDelay?: number; // Default: 10000ms
+}
+
 export interface GitHubDBConfig {
   accessToken: string;
   owner: string;
   repo: string;
   branch?: string;
   cacheTTL?: number;
+  retry?: RetryConfig | false; // false to disable
 }
 
 export type Schema = Record<string, any>;
@@ -58,6 +65,15 @@ export class ConcurrencyError extends Error {
   constructor(public readonly path: string) {
     super(`Concurrency conflict at ${path}. The remote data has changed.`);
     this.name = "ConcurrencyError";
+  }
+}
+
+export class RateLimitError extends Error {
+  constructor(public readonly retryAfter?: number) {
+    super(
+      `GitHub API rate limit exceeded${retryAfter ? `. Retry after ${retryAfter}s` : ""}`
+    );
+    this.name = "RateLimitError";
   }
 }
 
