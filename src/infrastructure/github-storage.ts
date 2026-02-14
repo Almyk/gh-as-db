@@ -32,7 +32,7 @@ export class GitHubStorageProvider implements IStorageProvider {
       maxDelay = 10000,
     } = this.config.retry ?? {};
 
-    let lastError: any;
+    let lastError: Error & { status?: number; response?: any };
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
@@ -56,22 +56,27 @@ export class GitHubStorageProvider implements IStorageProvider {
           delay =
             parseInt(error.response.headers["retry-after"], 10) * 1000;
         } else {
-          delay = Math.min(baseDelay * Math.pow(2, attempt), maxDelay);
+          delay = baseDelay * Math.pow(2, attempt);
+          // Add jitter to avoid thundering herd on simultaneous retries
+          delay = delay * (0.5 + Math.random() * 0.5);
         }
+
+        // Cap all delays (including Retry-After) against maxDelay
+        delay = Math.min(delay, maxDelay);
 
         await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
 
     // Exhausted retries on 429 → RateLimitError
-    if (lastError?.status === 429) {
-      const retryAfter = lastError.response?.headers?.["retry-after"];
+    if (lastError!.status === 429) {
+      const retryAfter = lastError!.response?.headers?.["retry-after"];
       throw new RateLimitError(
         retryAfter ? parseInt(retryAfter, 10) : undefined
       );
     }
 
-    throw lastError;
+    throw lastError!;
   }
 
   async testConnection(): Promise<boolean> {
@@ -200,6 +205,9 @@ export class GitHubStorageProvider implements IStorageProvider {
       }
     }
 
+    // Note: internalSha is resolved before the retry wrapper. If a write fails
+    // with a 5xx after GitHub has already committed the file (e.g. network timeout),
+    // the retry will reuse the stale sha and may fail with a 409.
     try {
       const response = await this.retryWithBackoff(() =>
         this.octokit.repos.createOrUpdateFileContents({
