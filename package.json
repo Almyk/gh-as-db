@@ -24,7 +24,7 @@
     "test": "vitest",
     "test:run": "vitest run",
     "build": "tsc",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "pnpm build"
   },
   "keywords": [
     "github",
