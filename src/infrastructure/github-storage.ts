@@ -1,6 +1,8 @@
 import { Octokit } from "@octokit/rest";
 import {
   ConcurrencyError,
+  RateLimitError,
+  RetryConfig,
   GitHubDBConfig,
   IStorageProvider,
   StorageResponse,
@@ -21,12 +23,70 @@ export class GitHubStorageProvider implements IStorageProvider {
     this.cache = cache || new MemoryCacheProvider();
   }
 
+  private async retryWithBackoff<T>(fn: () => Promise<T>): Promise<T> {
+    if (this.config.retry === false) return fn();
+
+    const {
+      maxRetries = 3,
+      baseDelay = 1000,
+      maxDelay = 10000,
+    } = this.config.retry ?? {};
+
+    let lastError: Error & { status?: number; response?: any };
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        return await fn();
+      } catch (error: any) {
+        lastError = error;
+        const status = error?.status;
+
+        // Non-retryable: 409 (concurrency), 4xx client errors (except 429)
+        if (status === 409) throw error;
+        if (status && status < 500 && status !== 429) throw error;
+        // Errors without a status code (non-HTTP errors) — rethrow
+        if (!status) throw error;
+
+        // Last attempt — don't wait, just break
+        if (attempt === maxRetries) break;
+
+        // Calculate delay
+        let delay: number;
+        if (status === 429 && error.response?.headers?.["retry-after"]) {
+          delay =
+            parseInt(error.response.headers["retry-after"], 10) * 1000;
+        } else {
+          delay = baseDelay * Math.pow(2, attempt);
+          // Add jitter to avoid thundering herd on simultaneous retries
+          delay = delay * (0.5 + Math.random() * 0.5);
+        }
+
+        // Cap all delays (including Retry-After) against maxDelay
+        delay = Math.min(delay, maxDelay);
+
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+
+    // Exhausted retries on 429 → RateLimitError
+    if (lastError!.status === 429) {
+      const retryAfter = lastError!.response?.headers?.["retry-after"];
+      throw new RateLimitError(
+        retryAfter ? parseInt(retryAfter, 10) : undefined
+      );
+    }
+
+    throw lastError!;
+  }
+
   async testConnection(): Promise<boolean> {
     try {
-      await this.octokit.repos.get({
-        owner: this.config.owner,
-        repo: this.config.repo,
-      });
+      await this.retryWithBackoff(() =>
+        this.octokit.repos.get({
+          owner: this.config.owner,
+          repo: this.config.repo,
+        })
+      );
       return true;
     } catch (error) {
       return false;
@@ -39,11 +99,13 @@ export class GitHubStorageProvider implements IStorageProvider {
     }
 
     try {
-      await this.octokit.repos.getContent({
-        owner: this.config.owner,
-        repo: this.config.repo,
-        path,
-      });
+      await this.retryWithBackoff(() =>
+        this.octokit.repos.getContent({
+          owner: this.config.owner,
+          repo: this.config.repo,
+          path,
+        })
+      );
       return true;
     } catch (error: any) {
       if (error.status === 404) {
@@ -64,12 +126,14 @@ export class GitHubStorageProvider implements IStorageProvider {
     const stale = this.staleCache.get(path) as StorageResponse<T> | undefined;
 
     try {
-      const response = await this.octokit.repos.getContent({
-        owner: this.config.owner,
-        repo: this.config.repo,
-        path,
-        headers: stale ? { "if-none-match": `"${stale.sha}"` } : {},
-      });
+      const response = await this.retryWithBackoff(() =>
+        this.octokit.repos.getContent({
+          owner: this.config.owner,
+          repo: this.config.repo,
+          path,
+          headers: stale ? { "if-none-match": `"${stale.sha}"` } : {},
+        })
+      );
 
       if (Array.isArray(response.data)) {
         throw new Error("Path is a directory, not a file");
@@ -122,11 +186,13 @@ export class GitHubStorageProvider implements IStorageProvider {
         internalSha = cached.sha;
       } else {
         try {
-          const existing = await this.octokit.repos.getContent({
-            owner: this.config.owner,
-            repo: this.config.repo,
-            path,
-          });
+          const existing = await this.retryWithBackoff(() =>
+            this.octokit.repos.getContent({
+              owner: this.config.owner,
+              repo: this.config.repo,
+              path,
+            })
+          );
 
           if (!Array.isArray(existing.data) && "sha" in existing.data) {
             internalSha = existing.data.sha;
@@ -139,19 +205,26 @@ export class GitHubStorageProvider implements IStorageProvider {
       }
     }
 
+    // Note: internalSha is resolved before the retry wrapper. If a write fails
+    // with a 5xx after GitHub has already committed the file (e.g. network timeout),
+    // the retry will reuse the stale sha and may fail with a 409.
     try {
-      const response = await this.octokit.repos.createOrUpdateFileContents({
-        owner: this.config.owner,
-        repo: this.config.repo,
-        path,
-        message,
-        content: btoa(
-          Array.from(new TextEncoder().encode(JSON.stringify(content, null, 2)))
-            .map((b) => String.fromCharCode(b))
-            .join("")
-        ),
-        sha: internalSha,
-      });
+      const response = await this.retryWithBackoff(() =>
+        this.octokit.repos.createOrUpdateFileContents({
+          owner: this.config.owner,
+          repo: this.config.repo,
+          path,
+          message,
+          content: btoa(
+            Array.from(
+              new TextEncoder().encode(JSON.stringify(content, null, 2))
+            )
+              .map((b) => String.fromCharCode(b))
+              .join("")
+          ),
+          sha: internalSha,
+        })
+      );
 
       const newSha = response.data.content?.sha || "";
       const result = { data: content, sha: newSha };
@@ -178,19 +251,23 @@ export class GitHubStorageProvider implements IStorageProvider {
 
     try {
       // 1. Get the current head SHA
-      const { data: ref } = await this.octokit.git.getRef({
-        owner: this.config.owner,
-        repo: this.config.repo,
-        ref: `heads/${branch}`,
-      });
+      const { data: ref } = await this.retryWithBackoff(() =>
+        this.octokit.git.getRef({
+          owner: this.config.owner,
+          repo: this.config.repo,
+          ref: `heads/${branch}`,
+        })
+      );
       const latestCommitSha = ref.object.sha;
 
       // 2. Get the tree SHA of the latest commit
-      const { data: latestCommit } = await this.octokit.git.getCommit({
-        owner: this.config.owner,
-        repo: this.config.repo,
-        commit_sha: latestCommitSha,
-      });
+      const { data: latestCommit } = await this.retryWithBackoff(() =>
+        this.octokit.git.getCommit({
+          owner: this.config.owner,
+          repo: this.config.repo,
+          commit_sha: latestCommitSha,
+        })
+      );
       const baseTreeSha = latestCommit.tree.sha;
 
       // 3. Create a new tree with multiple files
@@ -211,29 +288,35 @@ export class GitHubStorageProvider implements IStorageProvider {
         };
       });
 
-      const { data: newTree } = await this.octokit.git.createTree({
-        owner: this.config.owner,
-        repo: this.config.repo,
-        base_tree: baseTreeSha,
-        tree: treeEntries,
-      });
+      const { data: newTree } = await this.retryWithBackoff(() =>
+        this.octokit.git.createTree({
+          owner: this.config.owner,
+          repo: this.config.repo,
+          base_tree: baseTreeSha,
+          tree: treeEntries,
+        })
+      );
 
       // 4. Create a new commit
-      const { data: newCommit } = await this.octokit.git.createCommit({
-        owner: this.config.owner,
-        repo: this.config.repo,
-        message,
-        tree: newTree.sha,
-        parents: [latestCommitSha],
-      });
+      const { data: newCommit } = await this.retryWithBackoff(() =>
+        this.octokit.git.createCommit({
+          owner: this.config.owner,
+          repo: this.config.repo,
+          message,
+          tree: newTree.sha,
+          parents: [latestCommitSha],
+        })
+      );
 
       // 5. Update the reference
-      await this.octokit.git.updateRef({
-        owner: this.config.owner,
-        repo: this.config.repo,
-        ref: `heads/${branch}`,
-        sha: newCommit.sha,
-      });
+      await this.retryWithBackoff(() =>
+        this.octokit.git.updateRef({
+          owner: this.config.owner,
+          repo: this.config.repo,
+          ref: `heads/${branch}`,
+          sha: newCommit.sha,
+        })
+      );
 
       // 6. Update cache for all involved files
       const ttl = this.config.cacheTTL ?? this.DEFAULT_TTL;
@@ -258,13 +341,15 @@ export class GitHubStorageProvider implements IStorageProvider {
   }
 
   async deleteFile(path: string, message: string, sha: string): Promise<void> {
-    await this.octokit.repos.deleteFile({
-      owner: this.config.owner,
-      repo: this.config.repo,
-      path,
-      message,
-      sha,
-    });
+    await this.retryWithBackoff(() =>
+      this.octokit.repos.deleteFile({
+        owner: this.config.owner,
+        repo: this.config.repo,
+        path,
+        message,
+        sha,
+      })
+    );
     this.cache.delete(path);
     this.staleCache.delete(path);
   }
@@ -273,11 +358,13 @@ export class GitHubStorageProvider implements IStorageProvider {
     path: string
   ): Promise<{ path: string; sha: string; type: "file" | "dir" }[]> {
     try {
-      const response = await this.octokit.repos.getContent({
-        owner: this.config.owner,
-        repo: this.config.repo,
-        path,
-      });
+      const response = await this.retryWithBackoff(() =>
+        this.octokit.repos.getContent({
+          owner: this.config.owner,
+          repo: this.config.repo,
+          path,
+        })
+      );
 
       if (!Array.isArray(response.data)) {
         throw new Error("Path is not a directory");
