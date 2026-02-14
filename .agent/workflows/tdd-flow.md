@@ -13,11 +13,11 @@ Follow these steps for every new feature or bug fix.
 5.  **Write Failing Test (RED)**:
     - Define the interface or class if not existing.
     - Write a test that fails (compile error or assertion failure).
-    - Run `npm run test` to confirm it fails.
+    - Run `pnpm test` to confirm it fails.
 // turbo
 6.  **Write Implementation (GREEN)**:
     - Write the minimal code to make the test pass.
-    - Run `npm run test` until it passes.
+    - Run `pnpm test` until it passes.
 // turbo
 7.  **Refactor (REFACTOR)**:
     - Improve code structure without changing behavior.

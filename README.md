@@ -23,7 +23,7 @@ Use a private GitHub repository as a database for your application. `gh-as-db` p
 ## Installation
 
 ```bash
-npm install gh-as-db
+pnpm add gh-as-db
 ```
 
 ## Quick Start
